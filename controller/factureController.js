@@ -8,9 +8,8 @@ const axios = require('axios');
 const startSync = () => {
      var interval = setInterval(() => {
           clearInterval(interval)
-          //     selectAndSend()
+              selectAndSend()
           cancelInvoice()
-
      }, 5000)
 }
 
@@ -28,7 +27,6 @@ const cancelInvoice = async (req, res) => {
                const OBR_USERNAME = client.OBR_USERNAME
                const OBR_PASSWORD = client.OBR_PASSWORD
                const allFactures = await factureModel.cancelinvoice(client.ID_CLIENT);
-               // console.log(allFactures)
 
                if (allFactures.length <= 0) {  // TEST SI IL Y A DES FACTURES A ANNULER
                     console.log("Aucune facture à annuler");
@@ -39,18 +37,20 @@ const cancelInvoice = async (req, res) => {
 
                //DEBUT BOUCLE DES FACTURES A
                const factures = await Promise.all(allFactures.map(async facture => {
+                    console.log(facture)
                     if (facture.SIGNATURE) {
                          return {
                               signature: {
-                                   invoice_signature: facture.SIGNATURE,
-                                   FACTURE_ID: facture.FACTURE_ID,
-                                   ID_CLIENT: facture.ID_CLIENT,
-                                   TYPE_FACTURE: facture.TYPE_FACTURE,
-                                   MONTANT_TOTAL: facture.MONTANT_TOTAL
+                                   invoice_signature: facture.SIGNATURE
                               }
                          }
                     }
                })) //DEBUT BOUCLE DES FACTURES A ENVOYER
+               // res.status(201).json({
+               //      success: true,
+               //      message: "liste des factures",
+               //      resultats: factures
+               // })
 
                if (allFactures.length > 0) {
                     const resultats = await axios.post(url + '/ebms_api/login', {
@@ -58,29 +58,33 @@ const cancelInvoice = async (req, res) => {
                          password: OBR_PASSWORD
                     })
                     const users_token = "Bearer " + resultats.data.result.token
-                    console.log(users_token)
+                    // console.log(users_token)
                     await Promise.all(factures.map(async facture => {
                          console.log(facture.signature.invoice_signature)
-                         // try {
-                         //      const factureResponse = await axios.post(url + '/ebms_api/cancelInvoice', {
-                         //           invoice_signature:facture.signature.invoice_signature,
-                         //           headers: { Authorization: `${users_token}` }
-                         //      })
-                         //      console.log(factureResponse)
-                         //      if(factureResponse.data.success){
-                         //           console.log(factureResponse.data.msg)
-                         //      }
-                         // } catch (error) {
-                         //      console.log(error)
-                         //      res.status(500).send('server error')
-                         // }
+                         try {
+                              const factureResponse = await axios.post(url + '/ebms_api/cancelInvoice', facture.signature, {
+                                   // invoice_signature:facture.signature.invoice_signature,
+                                   headers: { Authorization: `${users_token}`}
+                              })
+                              if(factureResponse.data.success==true){
+                                   console.log(factureResponse.data.msg)
+                                  const updateFacture = await factureModel.update_annuler(facture.signature.invoice_signature) // update the status
+                                  res.status(200).json({
+                                   success:true,
+                                   message:"Update est faite avec succes",
+                                   resultats:updateFacture
+                                  })
+                              }else{
+                                   res.status(500).send("update failled")
+                              }
+                         } catch (error) {
+                              console.log(error)
+                              res.status(500).send('server error')
+                         }
                     }))
+               }else{
+                    console.log("Aucune facture")
                }
-
-               res.status(200).json({
-                    success: true,
-                    resultat: factures
-               })
 
 
 
@@ -258,13 +262,14 @@ const selectAndSend = async () => {
                     const users_token = "Bearer " + resultats.data.result.token
 
                     await Promise.all(factures.map(async facture => {
+                         // console.log(facture)
 
                          try {
                               //AJOUT D'UNE FACTURE CHEZ OBR
                               const factureResponse = await axios.post(url + '/ebms_api/addInvoice', facture.facture, {
                                    headers: { Authorization: `${users_token}` }
                               })
-                              //console.log('factureResponse')
+                              // console.log('factureResponse')
                               //Test pour savoir si la facture existe déjà
                               const signature = `${NIF}/${OBR_USERNAME}/${moment(facture.facture.invoice_date).format('YYYYMMDDhhmmss')}/${facture.facture.invoice_number}`
 
@@ -285,6 +290,9 @@ const selectAndSend = async () => {
                               if (error.response) {
                                    console.log(`${NOM_CONTRIBUABLE} en cours...`)
                                    console.log(error.response.data.msg)
+                                   if (error.response.data.msg == 'Une facture avec le même numéro existe déjà.') {
+                                        await factureModel.updateFactureExist(facture.facture.invoice_number)
+                                   }
                                    console.log('finished')
                                    startSync()
                               } else {

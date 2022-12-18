@@ -12,7 +12,7 @@ const findAll = async (ID_CLIENT) => {
 
 const cancelinvoice = async (ID_CLIENT) => {
     try {
-              var sqlQuery = "SELECT * FROM facture_club WHERE 1 AND ID_CLIENT = ? AND IS_ANNULE = 0 LIMIT 10 "
+              var sqlQuery = "SELECT * FROM facture_club WHERE 1 AND ID_CLIENT = ? AND IS_ANNULE = 2 LIMIT 10 "
               return query(sqlQuery, [ID_CLIENT]);
     } catch (error) {
               throw error;
@@ -40,6 +40,17 @@ const setSended = async (signature,NUMERO_FATURE) => {
           }
 }
 
+
+const updateFactureExist = async (NUMERO_FATURE) => {
+    //console.log("NUMERO_FATURE", NUMERO_FATURE)
+    try {
+              var sqlQuery = "UPDATE facture_club SET IS_SEND = 2 WHERE NUMERO_FATURE = ?"
+              return query(sqlQuery, [NUMERO_FATURE]);
+    } catch (error) {
+              throw error;
+    }
+}
+
 const update_annuler = async (signature) => {
 
     try {
@@ -55,5 +66,6 @@ module.exports = {
           findByNumeroFacture,
           setSended,
           cancelinvoice,
-          update_annuler
+          update_annuler,
+          updateFactureExist
 };
